@@ -80,7 +80,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # Отправляем файл админу
             await context.bot.send_document(chat_id=ADMIN_ID, document=open(file_path, "rb"), caption=caption)
-            await update.message.reply_text("Квитанция успешно отправлена админу!")
+            await update.message.reply_text("Квитанция успешно отправлена админу! Как только лицензия будет готова, вы получите извещение на указаный email.")
 
         except Exception as e:
             await update.message.reply_text(f"Произошла ошибка при обработке файла: {e}")
