@@ -46,3 +46,4 @@ uncompyle6==3.9.1
 unpyclib==0.8.1
 urllib3==2.2.1
 xdis==6.1.0
+python-telegram-bot==20.5
