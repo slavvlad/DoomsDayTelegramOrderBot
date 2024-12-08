@@ -45,7 +45,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif not user_info['email']:
             # Запрашиваем email
             user_info['email'] = text
-            await update.message.reply_text(f"Спасибо! Сделайте перевод на номер {ACCOUNT_INFO} на сумму соответвующую времени лицензии бота указаную в [прайс листе](https://t.me/c/2001621446/3/39) и прикрепите квитанцию о оплате здесь.",
+            await update.message.reply_text(f"Спасибо! Напишите [мне]({ACCOUNT_INFO}) для получение реквезитов для переводы.Сумма перевода должна соответсвовать сторимости времени лицензии бота указаную в [прайс листе](https://t.me/c/2001621446/3/39) и прикрепите квитанцию о оплате здесь.",
         parse_mode='Markdown')
         else:
             await update.message.reply_text("Вы уже ввели все данные. Пожалуйста, прикрепите файл квитанции.")
