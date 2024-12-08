@@ -5,14 +5,18 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, fil
 # Словарь для хранения данных пользователей
 user_data = {}
 
-# Ваш Telegram ID для получения сообщений
-ADMIN_ID = 751393268  # Замените на ваш Telegram ID
+TOKEN = os.getenv("BOT_TOKEN")
+ADMIN_ID = os.getenv("ADMIN_ID")
+ACCOUNT_INFO = os.getenv("ACCOUNT_INFO")
+
+if not TOKEN or not ADMIN_ID:
+    raise ValueError("BOT_TOKEN and ADMIN_ID must be set in environment variables.")
 
 # Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
-    user_data[user_id] = {'name': '', 'reg_numbers': []}
-    await update.message.reply_text("Здравствуйте! Пожалуйста, отправьте ваше имя и фамилию.")
+    user_data[user_id] = {'name': '', 'reg_numbers': [], 'email': ''}  # Добавляем email в словарь
+    await update.message.reply_text("Здравствуйте! Пожалуйста, отправьте ваш игровой ник.")
 
 # Объединенная функция для обработки текстов и файлов
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -37,14 +41,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Заполняем регистрационные номера
             reg_numbers = [num.strip() for num in text.replace('\n', ',').replace(' ', ',').split(',') if num.strip()]
             user_info['reg_numbers'] = reg_numbers
-            await update.message.reply_text("Спасибо! Теперь прикрепите квитанцию.")
+            await update.message.reply_text("Спасибо! Теперь отправьте ваш email на который придет ссылка для скачивания бота")
+        elif not user_info['email']:
+            # Запрашиваем email
+            user_info['email'] = text
+            await update.message.reply_text(f"Спасибо! Сделайте перевод на номер {ACCOUNT_INFO} на сумму соответвующую времени лицензии бота указаную в [прис листе](https://t.me/c/2001621446/3/39) и прикрепите квитанцию о оплате здесь.",
+        parse_mode='Markdown')
         else:
             await update.message.reply_text("Вы уже ввели все данные. Пожалуйста, прикрепите файл квитанции.")
 
     # Если пользователь отправил документ
     elif update.message.document or update.message.photo:
-        if not user_info['name'] or not user_info['reg_numbers']:
-            await update.message.reply_text("Пожалуйста, сначала отправьте ваше имя и регистрационные номера.")
+        if not user_info['name'] or not user_info['reg_numbers'] or not user_info['email']:
+            await update.message.reply_text("Пожалуйста, сначала отправьте ваше имя, регистрационные номера и email.")
             return
 
         try:
@@ -65,7 +74,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             caption = (
                 f"Новая квитанция от пользователя:\n"
                 f"Имя: {user_info['name']}\n"
-                f"Регистрационные номера (IGG): {reg_numbers_text}"
+                f"Регистрационные номера (IGG): {reg_numbers_text}\n"
+                f"Email: {user_info['email']}"
             )
 
             # Отправляем файл админу
@@ -92,7 +102,7 @@ async def get_my_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Основной код
 def main():
     # Создайте приложение Telegram
-    app = ApplicationBuilder().token("6959898325:AAHhxcgFsSMQWCwbVVb0NTI942f_pZDpwzs").build()
+    app = ApplicationBuilder().token(TOKEN).build()
 
     # Регистрация обработчиков
     app.add_handler(CommandHandler("start", start))
