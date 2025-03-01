@@ -36,7 +36,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not user_info['name']:
             # Заполняем имя и фамилию
             user_info['name'] = text
-            await update.message.reply_text("Спасибо! Теперь отправьте один или несколько регистрационных номеров (IGG).")
+            await update.message.reply_text("Спасибо! Теперь отправьте один или несколько регистрационных номеров (IGG). Если номеров несколько, используйте , и пробел для перечисления")
         elif not user_info['reg_numbers']:
             # Заполняем регистрационные номера
             reg_numbers = [num.strip() for num in text.replace('\n', ',').replace(' ', ',').split(',') if num.strip()]
@@ -45,7 +45,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif not user_info['email']:
             # Запрашиваем email
             user_info['email'] = text
-            await update.message.reply_text(f"Спасибо! Напишите [мне]({ACCOUNT_INFO}) для получение реквезитов для переводы.Сумма перевода должна соответсвовать сторимости времени лицензии бота указаную в [прайс листе](https://t.me/c/2001621446/3/39) и прикрепите квитанцию о оплате здесь.",
+            await update.message.reply_text(f"Спасибо! Напишите [мне]({ACCOUNT_INFO}) для получение реквезитов для перевода.Сумма перевода должна соответсвовать стоимости времени лицензии бота указаную в [прайс листе](https://t.me/c/2001621446/3/39) и прикрепите квитанцию о оплате здесь.",
         parse_mode='Markdown')
         else:
             await update.message.reply_text("Вы уже ввели все данные. Пожалуйста, прикрепите файл квитанции.")
