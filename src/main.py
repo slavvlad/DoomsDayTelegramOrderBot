@@ -36,7 +36,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not user_info['name']:
             # Заполняем имя и фамилию
             user_info['name'] = text
-            await update.message.reply_text("Спасибо! Теперь отправьте один или несколько регистрационных номеров (IGG). Если номеров несколько, используйте , и пробел для перечисления")
+            await update.message.reply_text(f"Спасибо {user_info['name']}! Теперь отправьте один или несколько регистрационных номеров (IGG). Если номеров несколько, используйте , или пробел для перечисления")
         elif not user_info['reg_numbers']:
             # Заполняем регистрационные номера
             reg_numbers = [num.strip() for num in text.replace('\n', ',').replace(' ', ',').split(',') if num.strip()]
