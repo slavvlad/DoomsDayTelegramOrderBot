@@ -1,6 +1,6 @@
 import os
-from telegram import Update, InputFile
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram import Update, InputFile, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 
 # Словарь для хранения данных пользователей
 user_data = {}
@@ -16,7 +16,14 @@ if not TOKEN or not ADMIN_ID:
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     user_data[user_id] = {'name': '', 'reg_numbers': [], 'email': ''}  # Добавляем email в словарь
-    await update.message.reply_text("Здравствуйте! Пожалуйста, отправьте ваш игровой ник.")
+
+    welcome_message = (
+        "Привет! 👋 Добро пожаловать в нашего бота.\n\n"
+        "Я помогу вам оформить заказ бота и отправить квитанцию.\n"
+        "Пожалуйста, следуйте указаниям.\n\n"
+        "Сначала отправьте свой игровой ник."
+    )
+    await update.message.reply_text(welcome_message)
 
 # Объединенная функция для обработки текстов и файлов
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -71,8 +78,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # Подготовка сообщения для отправки админу
             reg_numbers_text = ', '.join(user_info['reg_numbers'])
+            user = update.message.from_user
+            username = f"@{user.username}" if user.username else f"[{user.full_name}](tg://user?id={user.id})"
             caption = (
-                f"Новая квитанция от пользователя:\n"
+                f"Новая квитанция от пользователя {username}:\n"
                 f"Имя: {user_info['name']}\n"
                 f"Регистрационные номера (IGG): {reg_numbers_text}\n"
                 f"Email: {user_info['email']}"
@@ -95,9 +104,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Пожалуйста, отправьте текст или прикрепите файл.")
 
 # Команда для получения ID (для настройки ADMIN_ID)
-async def get_my_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
-    await update.message.reply_text(f"Ваш Telegram ID: {user_id}")
+#async def get_my_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
+#    user_id = update.message.from_user.id
+#    await update.message.reply_text(f"Ваш Telegram ID: {user_id}")
 
 # Основной код
 def main():
@@ -106,8 +115,9 @@ def main():
 
     # Регистрация обработчиков
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("getid", get_my_id))
+    #app.add_handler(CommandHandler("getid", get_my_id))
     app.add_handler(MessageHandler(filters.ALL, handle_message))
+    #app.add_handler(CallbackQueryHandler(button))  # Обработчик для кнопки Start
 
     # Запуск бота
     app.run_polling()
