@@ -1,6 +1,6 @@
 import os
-from telegram import Update, InputFile
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram import Update, InputFile, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 
 # Словарь для хранения данных пользователей
 user_data = {}
@@ -12,11 +12,35 @@ ACCOUNT_INFO = os.getenv("ACCOUNT_INFO")
 if not TOKEN or not ADMIN_ID:
     raise ValueError("BOT_TOKEN and ADMIN_ID must be set in environment variables.")
 
+
 # Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
-    user_data[user_id] = {'name': '', 'reg_numbers': [], 'email': ''}  # Добавляем email в словарь
-    await update.message.reply_text("Здравствуйте! Пожалуйста, отправьте ваш игровой ник.")
+    user_data[user_id] = {'name': '', 'reg_numbers': []}  # Убрали email из словаря
+
+    welcome_message = (
+        "Привет! 👋 Добро пожаловать \n\n"
+        "Я помогу вам оформить заказ бота и отправить квитанцию.\n"
+        "Пожалуйста, следуйте указаниям.\n\n"
+        "Сначала сообщите нам свой игровой ник."
+    )
+    await update.message.reply_text(welcome_message)
+
+
+# Обработчик ответа на кнопки
+async def payment_response(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+    answer = query.data
+    await query.answer()
+
+    if answer == "yes":
+        await query.message.reply_text("Пожалуйста, прикрепите квитанцию об оплате.")
+    else:
+        await query.message.reply_text(
+            f"Спасибо. Ваш запрос на оформление лицензии был отправлен администрации. Мы свяжемся с вами в ближайшее время для предоставления реквизитов к оплате.\nЕсли у вас возникли какие то вопросы, вы можете задать их на нашем [форуме]({ACCOUNT_INFO})" ,
+    parse_mode="Markdown")
+
 
 # Объединенная функция для обработки текстов и файлов
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -36,24 +60,27 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not user_info['name']:
             # Заполняем имя и фамилию
             user_info['name'] = text
-            await update.message.reply_text(f"Спасибо {user_info['name']}! Теперь отправьте один или несколько регистрационных номеров (IGG). Если номеров несколько, используйте , или пробел для перечисления")
+            await update.message.reply_text(
+                f"Спасибо {user_info['name']}! Теперь отправьте один или несколько регистрационных номеров (IGG). Если номеров несколько, используйте , или пробел для перечисления")
         elif not user_info['reg_numbers']:
             # Заполняем регистрационные номера
             reg_numbers = [num.strip() for num in text.replace('\n', ',').replace(' ', ',').split(',') if num.strip()]
             user_info['reg_numbers'] = reg_numbers
-            await update.message.reply_text("Спасибо! Теперь отправьте ваш email на который придет ссылка для скачивания бота")
-        elif not user_info['email']:
-            # Запрашиваем email
-            user_info['email'] = text
-            await update.message.reply_text(f"Спасибо! Напишите [мне]({ACCOUNT_INFO}) для получение реквезитов для перевода.Сумма перевода должна соответсвовать стоимости времени лицензии бота указаную в [прайс листе](https://t.me/c/2001621446/3/39) и прикрепите квитанцию о оплате здесь.",
-        parse_mode='Markdown')
+
+            # Запрос об оплате
+            keyboard = [
+                [InlineKeyboardButton("Да", callback_data="yes")],
+                [InlineKeyboardButton("Нет", callback_data="no")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text("Вы уже оплатили лицензию?", reply_markup=reply_markup)
         else:
             await update.message.reply_text("Вы уже ввели все данные. Пожалуйста, прикрепите файл квитанции.")
 
     # Если пользователь отправил документ
     elif update.message.document or update.message.photo:
-        if not user_info['name'] or not user_info['reg_numbers'] or not user_info['email']:
-            await update.message.reply_text("Пожалуйста, сначала отправьте ваше имя, регистрационные номера и email.")
+        if not user_info['name'] or not user_info['reg_numbers']:
+            await update.message.reply_text("Пожалуйста, сначала отправьте ваше имя и регистрационные номера.")
             return
 
         try:
@@ -71,16 +98,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # Подготовка сообщения для отправки админу
             reg_numbers_text = ', '.join(user_info['reg_numbers'])
+            user = update.message.from_user
+            username = f"@{user.username}" if user.username else f"[{user.full_name}](tg://user?id={user.id})"
             caption = (
-                f"Новая квитанция от пользователя:\n"
+                f"Новый запрос на приобретение бота от пользователя {username}:\n"
                 f"Имя: {user_info['name']}\n"
-                f"Регистрационные номера (IGG): {reg_numbers_text}\n"
-                f"Email: {user_info['email']}"
+                f"Регистрационные номера (IGG): {reg_numbers_text}"
             )
 
             # Отправляем файл админу
             await context.bot.send_document(chat_id=ADMIN_ID, document=open(file_path, "rb"), caption=caption)
-            await update.message.reply_text("Квитанция успешно отправлена админу! Как только лицензия будет готова, вы получите извещение на указаный email.")
+            await update.message.reply_text(
+                "Спасибо. Квитанция успешно отправлена администратору! В ближайшее время мы свяжемся с вами для оформления лицензии.")
 
         except Exception as e:
             await update.message.reply_text(f"Произошла ошибка при обработке файла: {e}")
@@ -94,23 +123,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("Пожалуйста, отправьте текст или прикрепите файл.")
 
-# Команда для получения ID (для настройки ADMIN_ID)
-async def get_my_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
-    await update.message.reply_text(f"Ваш Telegram ID: {user_id}")
 
 # Основной код
+
 def main():
     # Создайте приложение Telegram
     app = ApplicationBuilder().token(TOKEN).build()
 
     # Регистрация обработчиков
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("getid", get_my_id))
     app.add_handler(MessageHandler(filters.ALL, handle_message))
+    app.add_handler(CallbackQueryHandler(payment_response))
 
     # Запуск бота
     app.run_polling()
+
 
 if __name__ == "__main__":
     main()
