@@ -2,6 +2,23 @@ import os
 from telegram import Update, InputFile, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 
+
+from flask import Flask
+import threading
+
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Бот активен!"
+
+def run_server():
+    app.run(host="0.0.0.0", port=8080)
+
+# Запускаем веб-сервер в отдельном потоке
+threading.Thread(target=run_server, daemon=True).start()
+
+
 # Словарь для хранения данных пользователей
 user_data = {}
 
