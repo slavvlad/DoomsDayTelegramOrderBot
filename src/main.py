@@ -6,18 +6,15 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, fil
 from flask import Flask
 import threading
 
-app = Flask(__name__)
+# Создаем Flask-приложение (не конфликтует с Telegram API)
+flask_app = Flask(__name__)
 
-@app.route('/')
+@flask_app.route('/')
 def home():
     return "Бот активен!"
 
 def run_server():
-    app.run(host="0.0.0.0", port=8080)
-
-# Запускаем веб-сервер в отдельном потоке
-threading.Thread(target=run_server, daemon=True).start()
-
+    flask_app.run(host="0.0.0.0", port=8080)
 
 # Словарь для хранения данных пользователей
 user_data = {}
@@ -143,7 +140,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_document(chat_id=ADMIN_ID, document=open(file_path, "rb"), caption=caption)
             await update.message.reply_text(
                 "Спасибо. Квитанция успешно отправлена администратору! В ближайшее время мы свяжемся с вами для оформления лицензии.\n"
-                f"Если у вас возникли какие-то вопросы, вы можете задать их на нашем [форуме]({ACCOUNT_INFO}",
+                f"Если у вас возникли какие-то вопросы, вы можете задать их на нашем [форуме]({ACCOUNT_INFO})",
             parse_mode="Markdown")
 
         except Exception as e:
@@ -173,6 +170,10 @@ def main():
     # Запуск бота
     app.run_polling()
 
+# Запускаем веб-сервер в отдельном потоке
+threading.Thread(target=run_server, daemon=True).start()
 
 if __name__ == "__main__":
     main()
+
+
