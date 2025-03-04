@@ -1,6 +1,11 @@
 import os
-from telegram import Update, InputFile, InlineKeyboardButton, InlineKeyboardMarkup
+from io import BytesIO
+
+
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, File
+
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
+
 
 
 from flask import Flask
@@ -121,10 +126,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             elif update.message.photo:
                 file_id = update.message.photo[-1].file_id
                 file_name = "photo.jpg"
-
             file = await context.bot.get_file(file_id)
-            file_path = f"./{file_name}"
-            await file.download_to_drive(file_path)
+            file_bytes = await file.download_as_bytearray()
+            file_stream = BytesIO(file_bytes)
+            file_stream.seek(0)
+
 
             # Подготовка сообщения для отправки админу
             reg_numbers_text = ', '.join(user_info['reg_numbers'])
@@ -137,7 +143,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
             # Отправляем файл админу
-            await context.bot.send_document(chat_id=ADMIN_ID, document=open(file_path, "rb"), caption=caption)
+            await context.bot.send_document(chat_id=ADMIN_ID, document=file_stream, filename=file_name, caption=caption)
             await update.message.reply_text(
                 "Спасибо. Квитанция успешно отправлена администратору! В ближайшее время мы свяжемся с вами для оформления лицензии.\n"
                 f"Если у вас возникли какие-то вопросы, вы можете задать их на нашем [форуме]({ACCOUNT_INFO})",
@@ -146,10 +152,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             await update.message.reply_text(f"Произошла ошибка при обработке файла: {e}")
 
-        finally:
-            # Удаляем временный файл
-            if os.path.exists(file_path):
-                os.remove(file_path)
 
     # Если сообщение не содержит текст или файл
     else:
