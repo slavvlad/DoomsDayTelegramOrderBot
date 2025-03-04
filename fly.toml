@@ -6,7 +6,12 @@
 app = 'doomsdaytelegramorderbot'
 primary_region = 'fra'
 
+[deployment]
+  region = "fra"  # Only use the Frankfurt region
+  count = 1  # Only one machine
+
 [build]
+  dockerfile = "Dockerfile"
 
 [http_service]
   internal_port = 8080
