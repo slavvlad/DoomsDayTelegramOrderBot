@@ -6,20 +6,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, File
 
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 
-
-
-from flask import Flask
 import threading
-
-# Создаем Flask-приложение (не конфликтует с Telegram API)
-flask_app = Flask(__name__)
-
-@flask_app.route('/')
-def home():
-    return "Бот активен!"
-
-def run_server():
-    flask_app.run(host="0.0.0.0", port=8080)
 
 # Словарь для хранения данных пользователей
 user_data = {}
@@ -171,9 +158,6 @@ def main():
 
     # Запуск бота
     app.run_polling()
-
-# Запускаем веб-сервер в отдельном потоке
-threading.Thread(target=run_server, daemon=True).start()
 
 if __name__ == "__main__":
     main()
