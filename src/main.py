@@ -2,14 +2,16 @@
 # pip install python-telegram-bot==21.6 flask==3.0.3
 # Два Telegram-бота в одном процессе (polling) + Flask health на порту 8080.
 # Используется initialize/start/updater.start_polling (без run_polling).
-
+import json
 import os
 import asyncio
 import logging
 import threading
 from io import BytesIO
+import time
 
-from flask import Flask
+import requests
+from flask import Flask, jsonify, request
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application, ApplicationBuilder, CommandHandler, MessageHandler,
@@ -25,6 +27,8 @@ log = logging.getLogger("dual-bots")
 
 # ---------- Flask health ----------
 flask_app = Flask(__name__)
+
+DECISIONS = {}  # decision_id -> {"answers": [{"user_id": int, "action": "yes"|"no", "ts": float}], "created": float}
 
 @flask_app.route("/")
 def home():
@@ -222,6 +226,36 @@ async def cmd_id_auction(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="HTML"
     )
 
+async def cb_auction_buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    data = (q.data or "")
+    try:
+        prefix, action, decision_id = data.split(":", 3)
+    except ValueError:
+        return
+    if prefix != "auction" or action not in ("yes", "no"):
+        return
+
+    rec = DECISIONS.setdefault(decision_id, {"answers": [], "created": time.time()})
+    uid = q.from_user.id
+    if not any(a.get("user_id") == uid for a in rec["answers"]):
+        rec["answers"].append({"user_id": uid, "action": action, "ts": time.time()})
+
+    # снять клавиатуру у исходного сообщения
+    try:
+        await q.edit_message_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
+    # необязательное подтверждение в чат
+    try:
+        await q.message.reply_text("Ваш выбор принят: " + ("Купить ✅. Посетите аукцион внутри игры" if action == "yes" else "Не покупать ❌"))
+    except Exception:
+        pass
+
+
+
 # ---------- Builders ----------
 def build_main_bot() -> Application:
     app = ApplicationBuilder().token(TOKEN_MAIN).build()
@@ -238,6 +272,7 @@ def build_auction_bot() -> Application | None:
     app = ApplicationBuilder().token(TOKEN_AUCTION).build()
     app.add_handler(CommandHandler("start", cmd_start_auction))
     app.add_handler(CommandHandler("id", cmd_id_auction))
+    app.add_handler(CallbackQueryHandler(cb_auction_buy, pattern=r"^auction:(yes|no):"))
     return app
 
 # ---------- Main (асинхронный, без run_polling) ----------
@@ -278,6 +313,93 @@ async def amain():
             await app2.shutdown()
         await app1.stop()
         await app1.shutdown()
+
+
+@flask_app.route("/notify", methods=["POST"])
+def post_notify():
+    """
+    Accept lot notification from auction component and send it to recipients
+    with inline buttons "Buy Yes/No".
+    Expect form-data:
+      - photo: binary file (PNG/JPG)
+      - caption: str
+      - decision_id: str
+      - chat_ids: comma-separated str, e.g. "751393268,-100123..."
+    """
+    if not TOKEN_AUCTION:
+        return jsonify({"ok": False, "error": "TG_BOT_TOKEN_AUCTION is empty"}), 400
+
+    file = request.files.get("photo")
+    caption = request.form.get("caption", "")
+    decision_id = request.form.get("decision_id", "")
+    chat_ids_raw = request.form.get("chat_ids", "")
+
+    if not file or not decision_id or not chat_ids_raw:
+        return jsonify({"ok": False, "error": "photo/decision_id/chat_ids are required"}), 400
+
+    # подготовим клавиатуру
+    reply_markup = {
+        "inline_keyboard": [[
+            {"text": "Купить ✅", "callback_data": f"auction:yes:{decision_id}"},
+            {"text": "Нет ❌",    "callback_data": f"auction:no:{decision_id}"},
+        ]]
+    }
+
+    # нормализуем список получателей
+    chat_ids = [s.strip() for s in chat_ids_raw.split(",") if s.strip()]
+    if not chat_ids:
+        return jsonify({"ok": False, "error": "no recipients"}), 400
+
+    # заранее подготовим запись о решении
+    DECISIONS.setdefault(decision_id, {"answers": [], "created": time.time()})
+
+    # отправка
+    url = f"https://api.telegram.org/bot{TOKEN_AUCTION}/sendPhoto"
+    results = []
+    for cid in chat_ids:
+        data = {
+            "chat_id": cid,
+            "caption": caption,
+            "reply_markup": json.dumps(reply_markup, ensure_ascii=False),
+        }
+        files = {"photo": (file.filename or "lot.png", file.stream, file.mimetype or "image/png")}
+        try:
+            resp = requests.post(url, data=data, files=files, timeout=12)
+            ok = (resp.status_code == 200 and resp.json().get("ok") is True)
+            results.append({"chat_id": cid, "ok": ok, "status_code": resp.status_code, "body": resp.text[:200]})
+        except Exception as e:
+            results.append({"chat_id": cid, "ok": False, "error": str(e)})
+
+        # перемотать стрим назад для повторной отправки (важно для нескольких получателей)
+        try:
+            file.stream.seek(0)
+        except Exception:
+            pass
+
+    return jsonify({"ok": True, "results": results})
+
+
+@flask_app.route("/decision/<decision_id>")
+def get_decision(decision_id):
+    """
+    Return consolidated decision for a given decision_id.
+    status = "yes" if any user pressed Yes
+           = "no"  if there are only No's (at least one) and no Yes
+           = "pending" otherwise
+    """
+    data = DECISIONS.get(decision_id)
+    if not data:
+        return jsonify({"status": "pending", "answers": []})
+    answers = data.get("answers", [])
+    has_yes = any(a.get("action") == "yes" for a in answers)
+    has_no  = any(a.get("action") == "no"  for a in answers)
+    if has_yes:
+        status = "yes"
+    elif has_no:
+        status = "no"
+    else:
+        status = "pending"
+    return jsonify({"status": status, "answers": answers, "created": data.get("created")})
 
 if __name__ == "__main__":
     asyncio.run(amain())
