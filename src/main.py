@@ -382,7 +382,7 @@ def post_notify():
 @flask_app.route("/decision/<decision_id>")
 def get_decision(decision_id):
     """
-    Return consolidated decision for a given decision_id.
+    Return co nsolidated decision for a given decision_id.
     status = "yes" if any user pressed Yes
            = "no"  if there are only No's (at least one) and no Yes
            = "pending" otherwise
